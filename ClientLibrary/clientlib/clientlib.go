@@ -105,6 +105,7 @@ type NoticeEvent struct {
 
 // ErrTimeout is returned when the tunnel establishment attempt fails due to timeout
 var ErrTimeout = std_errors.New("clientlib: tunnel establishment timeout")
+var errMultipleStart = std_errors.New("clientlib: StartTunnel called multiple times")
 
 // started is used to ensure StartTunnel is called only once
 var started atomic.Bool
@@ -136,7 +137,7 @@ func StartTunnel(
 	noticeReceiver func(NoticeEvent)) (retTunnel *PsiphonTunnel, retErr error) {
 
 	if !started.CompareAndSwap(false, true) {
-		return nil, fmt.Errorf("StartTunnel called multiple times")
+		return nil, errMultipleStart
 	}
 
 	config, err := psiphon.LoadConfig(configJSON)

@@ -252,6 +252,108 @@ func TestStartTunnel(t *testing.T) {
 	}
 }
 
+func TestStartTunnelTwice(t *testing.T) {
+	clientPlatform := "clientlib_test.go"
+	networkID := "UNKNOWN"
+	timeout := 60
+
+	configJSON, err := os.ReadFile("../../psiphon/controller_test.config")
+	if err != nil {
+		// What to do if config file is not present?
+		t.Skipf("error loading configuration file: %s", err)
+	}
+
+	var config map[string]interface{}
+	err = json.Unmarshal(configJSON, &config)
+	if err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	type args struct {
+		ctxTimeout              time.Duration
+		configJSON              []byte
+		embeddedServerEntryList string
+		params                  Parameters
+		paramsDelta             ParametersDelta
+		noticeReceiver          func(NoticeEvent)
+	}
+	tests := []struct {
+		name        string
+		args        args
+		wantTunnel  bool
+		expectedErr error
+	}{
+		{
+			name: "Failure: StartTunnel cannot be called twice",
+			args: args{
+				ctxTimeout:              0,
+				configJSON:              configJSON,
+				embeddedServerEntryList: "",
+				params: Parameters{
+					ClientPlatform:                &clientPlatform,
+					NetworkID:                     &networkID,
+					EstablishTunnelTimeoutSeconds: &timeout,
+				},
+				paramsDelta:    nil,
+				noticeReceiver: nil,
+			},
+			wantTunnel:  true,
+			expectedErr: errMultipleStart,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			ctx := context.Background()
+			var cancelFunc context.CancelFunc
+			if tt.args.ctxTimeout > 0 {
+				ctx, cancelFunc = context.WithTimeout(ctx, tt.args.ctxTimeout)
+			}
+
+			tunnel, err := StartTunnel(
+				ctx,
+				tt.args.configJSON,
+				tt.args.embeddedServerEntryList,
+				tt.args.params,
+				tt.args.paramsDelta,
+				tt.args.noticeReceiver)
+
+			gotTunnel := (tunnel != nil)
+
+			_, err = StartTunnel(
+				ctx,
+				tt.args.configJSON,
+				tt.args.embeddedServerEntryList,
+				tt.args.params,
+				tt.args.paramsDelta,
+				tt.args.noticeReceiver)
+
+			if cancelFunc != nil {
+				cancelFunc()
+			}
+
+			if tunnel != nil {
+				tunnel.Stop()
+			}
+
+			if gotTunnel != tt.wantTunnel {
+				t.Errorf("StartTunnel() gotTunnel = %v, wantTunnel %v", err, tt.wantTunnel)
+			}
+
+			if err != tt.expectedErr {
+				t.Fatalf("StartTunnel() error = %v, expectedErr %v", err, tt.expectedErr)
+				return
+			}
+
+			if tunnel == nil {
+				return
+			}
+		})
+	}
+
+}
+
 func TestPsiphonTunnel_Dial(t *testing.T) {
 	trueVal := true
 	configJSON, err := os.ReadFile("../../psiphon/controller_test.config")
