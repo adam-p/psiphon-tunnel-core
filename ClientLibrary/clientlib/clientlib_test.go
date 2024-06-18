@@ -29,6 +29,34 @@ import (
 	"github.com/Psiphon-Labs/psiphon-tunnel-core/psiphon"
 	"github.com/Psiphon-Labs/psiphon-tunnel-core/psiphon/common/protocol"
 )
+func setupConfig(t *testing.T, disableFetcher bool) []byte {
+	configJSON, err := os.ReadFile("../../psiphon/controller_test.config")
+	if err != nil {
+		// What to do if config file is not present?
+		t.Skipf("error loading configuration file: %s", err)
+	}
+
+	var config map[string]interface{}
+	err = json.Unmarshal(configJSON, &config)
+	if err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	// Use the legacy encoding to both exercise that case, and facilitate a gradual
+	// network upgrade to new encoding support.
+	config["TargetAPIEncoding"] = protocol.PSIPHON_API_ENCODING_JSON
+
+	if disableFetcher {
+		config["DisableRemoteServerListFetcher"] = true
+	}
+
+	configJSON, err = json.Marshal(config)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	return configJSON
+}
 
 func TestStartTunnel(t *testing.T) {
 	// TODO: More comprehensive tests. This is only a smoke test.
