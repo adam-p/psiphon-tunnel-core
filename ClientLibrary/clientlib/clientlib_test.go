@@ -29,6 +29,7 @@ import (
 	"github.com/Psiphon-Labs/psiphon-tunnel-core/psiphon"
 	"github.com/Psiphon-Labs/psiphon-tunnel-core/psiphon/common/protocol"
 )
+
 func setupConfig(t *testing.T, disableFetcher bool) []byte {
 	configJSON, err := os.ReadFile("../../psiphon/controller_test.config")
 	if err != nil {
@@ -323,7 +324,7 @@ func TestMultipleStartTunnel(t *testing.T) {
 }
 
 func TestPsiphonTunnel_Dial(t *testing.T) {
-configJSON := setupConfig(t, false)
+	configJSON := setupConfig(t, false)
 	trueVal := true
 	
 	testDataDirName, err := os.MkdirTemp("", "psiphon-clientlib-test")
@@ -387,7 +388,7 @@ configJSON := setupConfig(t, false)
 // We had a problem where config-related notices were being printed to stderr before we
 // set the NoticeWriter. We want to make sure that no longer happens.
 func TestStartTunnelNoOutput(t *testing.T) {
-		// Before starting the tunnel, set up a notice receiver. If it receives anything at
+	// Before starting the tunnel, set up a notice receiver. If it receives anything at
 	// all, that means that it would have been printed to stderr.
 	psiphon.SetNoticeWriter(psiphon.NewNoticeReceiver(
 		func(notice []byte) {
