@@ -337,9 +337,10 @@ func TestPsiphonTunnel_Dial(t *testing.T) {
 		remoteAddr string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name          string
+		args          args
+		wantErr       bool
+		tunnelStopped bool
 	}{
 		{
 			name:    "Success: example.com",
@@ -350,6 +351,12 @@ func TestPsiphonTunnel_Dial(t *testing.T) {
 			name:    "Failure: invalid address",
 			args:    args{remoteAddr: "example.com:99999"},
 			wantErr: true,
+		},
+		{
+			name:          "Failure: tunnel not started",
+			args:          args{remoteAddr: "example.com:443"},
+			wantErr:       true,
+			tunnelStopped: true,
 		},
 	}
 	for _, tt := range tests {
@@ -371,6 +378,10 @@ func TestPsiphonTunnel_Dial(t *testing.T) {
 				t.Fatalf("StartTunnel() error = %v", err)
 			}
 			defer tunnel.Stop()
+
+			if tt.tunnelStopped {
+				tunnel.Stop()
+			}
 
 			conn, err := tunnel.Dial(tt.args.remoteAddr)
 			if (err != nil) != tt.wantErr {
