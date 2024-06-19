@@ -22,7 +22,9 @@ package clientlib
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +82,13 @@ func TestStartTunnel(t *testing.T) {
 	}
 	defer os.RemoveAll(testDataDirName)
 
+	paramsDeltaErr := func(err error) bool {
+		return strings.Contains(err.Error(), "SetParameters failed for delta")
+	}
+	timeoutErr := func(err error) bool {
+		return errors.Is(err, ErrTimeout)
+	}
+
 	type args struct {
 		ctxTimeout              time.Duration
 		configJSON              []byte
@@ -92,7 +101,7 @@ func TestStartTunnel(t *testing.T) {
 		name        string
 		args        args
 		wantTunnel  bool
-		expectedErr error
+		expectedErr func(error) bool
 	}{
 		{
 			name: "Failure: context timeout",
@@ -110,7 +119,7 @@ func TestStartTunnel(t *testing.T) {
 				noticeReceiver: nil,
 			},
 			wantTunnel:  false,
-			expectedErr: ErrTimeout,
+			expectedErr: timeoutErr,
 		},
 		{
 			name: "Failure: config timeout",
@@ -128,7 +137,7 @@ func TestStartTunnel(t *testing.T) {
 				noticeReceiver: nil,
 			},
 			wantTunnel:  false,
-			expectedErr: ErrTimeout,
+			expectedErr: timeoutErr,
 		},
 		{
 			name: "Success: simple",
@@ -206,6 +215,42 @@ func TestStartTunnel(t *testing.T) {
 			wantTunnel:  true,
 			expectedErr: nil,
 		},
+		{
+			name: "Success: good ParametersDelta",
+			args: args{
+				ctxTimeout:              0,
+				configJSON:              configJSON,
+				embeddedServerEntryList: "",
+				params: Parameters{
+					DataRootDirectory:             &testDataDirName,
+					ClientPlatform:                &clientPlatform,
+					NetworkID:                     &networkID,
+					EstablishTunnelTimeoutSeconds: &timeout,
+				},
+				paramsDelta:    ParametersDelta{"NetworkLatencyMultiplierMin": 1},
+				noticeReceiver: nil,
+			},
+			wantTunnel:  true,
+			expectedErr: nil,
+		},
+		{
+			name: "Failure: bad ParametersDelta",
+			args: args{
+				ctxTimeout:              0,
+				configJSON:              configJSON,
+				embeddedServerEntryList: "",
+				params: Parameters{
+					DataRootDirectory:             &testDataDirName,
+					ClientPlatform:                &clientPlatform,
+					NetworkID:                     &networkID,
+					EstablishTunnelTimeoutSeconds: &timeout,
+				},
+				paramsDelta:    ParametersDelta{"invalidParam": 1},
+				noticeReceiver: nil,
+			},
+			wantTunnel:  false,
+			expectedErr: paramsDeltaErr,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -238,8 +283,16 @@ func TestStartTunnel(t *testing.T) {
 				t.Errorf("StartTunnel() gotTunnel = %v, wantTunnel %v", err, tt.wantTunnel)
 			}
 
-			if err != tt.expectedErr {
-				t.Fatalf("StartTunnel() error = %v, expectedErr %v", err, tt.expectedErr)
+			if tt.expectedErr == nil {
+				if err != nil {
+					t.Fatalf("StartTunnel() returned unexpected error: %v", err)
+				}
+			} else if !tt.expectedErr(err) {
+				t.Fatalf("StartTunnel() error: %v", err)
+				return
+			}
+
+			if err != nil {
 				return
 			}
 
@@ -326,7 +379,7 @@ func TestMultipleStartTunnel(t *testing.T) {
 func TestPsiphonTunnel_Dial(t *testing.T) {
 	configJSON := setupConfig(t, false)
 	trueVal := true
-	
+
 	testDataDirName, err := os.MkdirTemp("", "psiphon-clientlib-test")
 	if err != nil {
 		t.Fatalf("ioutil.TempDir failed: %v", err)
